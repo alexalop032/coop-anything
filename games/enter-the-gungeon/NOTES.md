@@ -12,7 +12,7 @@
 - OS: Windows (win32)
 - Install path: see `local/install-path.txt` (private, git-ignored)
 - Game language config: russian
-- Architecture (32/64-bit): unknown — not yet checked
+- Architecture: x64 (EtG.exe PE machine 0x8664). The game loads the shipped `steam_api64.dll` (Valve SDK), not the x86 one.
 
 ## Phase 0 — triage result
 
@@ -129,6 +129,45 @@ client: EtG.exe --gungeon-online-name Clienty --gungeon-online-test join --gunge
 
 - Не синхронизируются: симуляция атак врагов (каждый клиент считает сам → возможны расхождения), предметы, выпавшие после смерти.
 - Требуется один и тот же набор модов/версия у всех (протокол 32; иначе `version mismatch`).
+
+## Phase 3p — кооп на 3+ игроков (GungeonTogether 3-Player), 2026-10-18
+
+### Почему именно этот мод (разведка)
+
+- Gungeon Online — жёстко на 2 игрока (доказано декомпиляцией `GungeonOnline.dll`): один `RemotePlayerState`, LAN-транспорт с одним peer (второй коннект отклоняется), `CreateLobby((ELobbyType)1, 2)`, gun id = `id*2 + hostFlag`. Базовая игра нативно — максимум 2 локально (2-й = The Cultist).
+- Единственный опубликованный билд на 3+ — **Rec-GungeonTogether_3Player** (Thunderstore; создан 2026-10-12, обновлён 2026-10-14; категория «AI Generated»). Остальные (`llamerrr/GungeonTogether`, `mamonts/GungeonTogether_LAN`) — 2p.
+- Красный флаг (rule 6): публичный репозиторий `AhmetRec/GungeonTogether-3Player` на HEAD = **0.9.0** (тег v0.9.0, csproj 0.9.0), а опубликованная DLL = **0.10.8.0**. Бинарник не совпадает с публичным исходником → доверять можно только самому бинарнику (проверяли его).
+
+### Скачанные пины (rule 8, official Thunderstore only)
+
+- `Rec-GungeonTogether_3Player-0.10.8.zip` — SHA-256 `1B2D51E54547F0C8F3B11D97686249E0177ABCE7A04126A7343D4048BFE82D4F` (277161 б).
+- `MtG_API-Mod_the_Gungeon_API-1.9.2.zip` — SHA-256 `4941CCF4DC325EB6C9826709E9C75AE3BA77969FDC5363C39369D81388E65571` (1083368 б). Зависимость 3p-мода.
+
+### Статический анализ бинарника (rule 4)
+
+- Декомпилировано в `local/decomp/3p/` (72 файла, 13285 строк).
+- Красных флагов нет: ни URL/IP-литералов, ни `Process.Start`/`ProcessStartInfo`, ни `WebClient`/`HttpClient`/`Dns`, ни `Registry`, ни `FromBase64String`, ни `DllImport`/нативных загрузок, ни записи файлов. `Reflection.Emit` (в `SteamCallbackRouter.cs`) — беньен (динамический делегат для роутинга Steam-колбэков). `Environment.*` — только `TickCount` (seed) и `GetCommandLineArgs` (парсинг Steam `+connect_lobby`).
+- Единственный ConfigEntry — `ProgressSync/Enabled`; телеметрии/аналитики/upload нет.
+
+### Boot-тест (rule 11) — PASS (только загрузка, не игра)
+
+- Изолированная копия `test-install-3p\Enter the Gungeon` (robocopy реальной установки, 243 файла) + BepInEx 5.4.2101 + MtG_API 1.9.2 + `GungeonTogether.dll` 0.10.8. `GungeonOnline.dll` убран, чтобы два мода не конфликтовали.
+- **Прогон 1 — FAIL по моей ошибке:** заменил `steam_api64.dll` на более новый из Steamworks.NET → `CSteamworks.dll` не нашёл нужные экспорты (`The specified procedure could not be found`) → Steam не инициализировался, игра вышла (code 0). Урок: игра **x64** (EtG.exe PE machine 0x8664), грузит **штатный** `steam_api64.dll`; подменять его нельзя. AppID задаётся через `steam_appid.txt=480`.
+- **Прогон 2 (штатные `steam_api*` + `steam_appid.txt=480`) — PASS:**
+  - `Loading [Gungeon Together 0.10.8]` → `Gunseon Together starting...` → `[Progress] Installed 8 progress query patches.` → `Gunseon Together ready.`
+  - Steam инициализирован: `Starting Steam platform interface`, `Received stats and achievements from Steam` — без ошибки CSteamworks.
+  - Сетевой слой мода поднялся: найдены типы Steamworks; `SendP2PPacket`/`ReadP2PPacket`/`IsP2PPacketAvailable`/`AcceptP2PSessionWithUser` = `Found`; созданы колбэки `LobbyCreated`/`LobbyEnter`/`GameRichPresenceJoinRequested`/`LobbyMatchList`.
+  - Игра дошла до главного меню; исключений от мода нет (только безобидные HarmonyX-варнинги «patch the declared method» и штатный шум игры: audio `select_idle`, x86 `XInputInterface32.dll`, achievement-варнинги из-за appid 480).
+- Изоляция сейвов (rule 2): папка `%USERPROFILE%\AppData\LocalLow\Dodge Roll\Enter the Gungeon` переименована на время теста и восстановлена; `SlotA.save` (125273 б, `E9F1C573…`) не изменён.
+- **Наблюдение:** владелец тем временем сам установил BepInEx + Gungeon Online в **реальную** установку (папка `BepInEx` создана 2026-10-18 22:07) и играл (SlotA.save вырос 125052 → 125273 б, mtime 22:26). Это действие владельца, не агента.
+- Ограничение: 3p-мод — **только Steam**, реальную сессию на 3 клиента локально не воспроизвести; нужен play-тест владельца.
+
+### Пакет для друзей (Phase 7-стиль)
+
+- `local/friends-package/GungeonTogether-3Player/` + `dist/Enter-the-Gungeon-3Player-Co-op.zip`.
+  - ZIP: 1872725 б, 38 записей, SHA-256 `702835F23C67135CB8D2EA9260FA2C576711C35E37CF9D3E320E8EB28C9A3ADD`.
+  - Содержимое: BepInExPack_EtG 5.4.2101 + MtG_API 1.9.2 (`BepInEx/plugins/MtGAPI/*`, `BepInEx/monomod/*`) + `BepInEx/plugins/GungeonTogether.dll` 0.10.8 + README (RU).
+- README предупреждает: несовместим с Gungeon Online (удалить `GungeonOnline.dll`), только Steam, мод экспериментальный.
 
 ## Next
 
