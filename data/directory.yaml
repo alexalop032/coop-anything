@@ -6275,3 +6275,28 @@
   - https://github.com/cranebeaker/coop-anything/tree/main/games/divinity-2-developers-cut
   - https://en.wikipedia.org/wiki/Divinity_II
   checked: '2026-10-18'
+- game: Enter the Gungeon
+  year: 2016
+  engine: Unity 2017.4 (Mono)
+  project: Gungeon Online
+  url: https://thunderstore.io/c/enter-the-gungeon/p/GoTeamAlex/Gungeon_Online/
+  other_urls:
+  - https://github.com/cranebeaker/coop-anything/tree/main/games/enter-the-gungeon
+  kind: mod
+  status: playable
+  coop_scope:
+    players_visible: yes
+    story: partial
+    enemies: partial
+    world_state: yes
+    items: partial
+  players: '2'
+  networking: lan
+  open_source: 'yes'
+  last_activity: '2026-10'
+  qa: automated
+  notes: "Gungeon Online 0.101.0, MIT, drops into BepInEx. Steam lobby invites plus LAN UDP 27460. The host shares the run seed and the world/level/save state; enemy death and HP are synced but enemy attack simulation is not, so combat can drift. Verified with two real game clients over LAN using the mod's built-in test harness: both connected, picked different characters and generated the same floor (fingerprint 2A7BE448); a ~4 minute run had no disconnect or version mismatch. Write-up in games/enter-the-gungeon."
+  sources:
+  - https://thunderstore.io/c/enter-the-gungeon/p/GoTeamAlex/Gungeon_Online/
+  - https://github.com/cranebeaker/coop-anything/tree/main/games/enter-the-gungeon
+  checked: '2026-10-18'
